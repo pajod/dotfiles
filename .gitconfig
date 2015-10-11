@@ -1,0 +1,5 @@
+[color]
+    ui = true
+    diff = true
+[core]
+    pager = less -FRXK

@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# this creates a simple status line from the results of connecting to any https server
+#  the result is may to be included in the footer of logcheck output
+# i use this to remind myself when some older websites are about to expire
+
+set -e
+#set -x
+
+echo "$1" | grep -q "[a-z0-9\.]*" || { echo -n "malformatted domain" ; exit -1 ; }
+dig "$1" A IN | grep -q "ANSWER: 1" 2>/dev/null || { echo -n "domain resolution problem" ; exit -1 ; }
+
+mkdir -p ~/.cache/server-check-cache/
+upcache=~/.cache/server-check-cache/up-status-$1
+
+if [ ! -f $upcache ] || file "$(find "$upcache" -mmin +300)" >/dev/null 2>&1; then
+
+    (
+    openssl s_client -reconnect -CApath /etc/ssl/certs/ -connect "$1:443" </dev/null >/dev/null 2>&1 || echo -n "reconnect problem"
+    out=$(openssl s_client -showcerts -reconnect -CApath /etc/ssl/certs/ -connect $1:443 </dev/null 2>&1)
+    echo $out | grep -q "Verify return code: 0 (ok)" || echo -n "cert verify problem"
+    cert=$( openssl s_client -connect "$1:443" </dev/null 2>/dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' |\
+                              openssl x509 -noout -subject -dates 2>/dev/null )
+    test -n "$cert" || echo "cert retrieval problem"
+
+    echo $cert | egrep -q "subject= ?/OU=Domain Control Validated/OU=[^/]*/CN=(www.)?$1" || echo -n "cert CN mismatch"
+    start_date=$(echo $cert | sed 's/.*notBefore=\(.*\).*not.*/\1/g')
+    end_date=$(echo $cert | sed 's/.*notAfter=\(.*\)$/\1/g')
+    start_epoch=$(date +%s -d "$start_date")
+    end_epoch=$(date +%s -d "$end_date")
+    epoch_now=$(date +%s)
+
+    test $epoch_now -gt $start_epoch || echo "cert not valid YET"
+    seconds_to_expire=$(($end_epoch - $epoch_now))
+    days_to_expire=$(($seconds_to_expire / 86400))
+    printf "%3s TLS " "${days_to_expire}"
+
+    domain_date=$(whois "$1" 2>/dev/null | egrep -i "(Registration Expiration Date|Expires on|Registry Expiry Date): " | cut -d ":" -f2 | cut -d "T" -f1| cut -d " " -f2)
+    test -n "$domain_date" && (
+        domain_epoch=$(date +%s -d "$domain_date")
+        domain_seconds_to_expire=$(($domain_epoch - $epoch_now))
+        domain_days_to_expire=$(($domain_seconds_to_expire / 86400))
+        printf "%3s TLD " "${domain_days_to_expire}"
+    ) || echo -n " -  TLD "
+
+    ) > $upcache
+
+    cat $upcache
+else
+    cat $upcache
+fi
+
+printf '% 9s' "$(ping -q -i0.2 -c4 $1 | tail -n 2 | tr '\n' 'X' |  \
+      sed -e 's/ packets transmitted, /\//' -e 's/ received//' -e 's/, 0% packet loss//' -e 's/, time [0-9]*ms//' \
+          -e 's/Xrtt min\/avg\/max\/mdev = .*\/.*\/\([0-9]*\)\.\([0-9]\)[0-9]*\/.*/ \1.\2 ms\n/')"
+#          -e :a -e 's/^.\{1,19\}$/& /;ta'

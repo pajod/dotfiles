@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# reasonable choices for -selection: primary | clip
+xclip -o -selection clip | ssh remote 'cat >~/clipboard.txt'
