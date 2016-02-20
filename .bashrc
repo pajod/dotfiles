@@ -208,4 +208,4 @@ function isdef() { eval test -n \"\${$1+1}\"; }
 echo -e "${txtgrn}Hostname:${txtrst} $(hostname -f)"
 echo -e "${txtgrn}UTF-8 chars:${txtrst} uuml \U00fc, euro \U20ac, sz \U00df, radio \U2622"
 echo -e "${txtgrn}IP:${txtrst} $(ip addr | grep ' inet6* ' | awk '{print $2}' | cut -f1 -d'/' | awk '{printf "%s, ", $1}')"
-echo -e "${txtgrn}Memory:${txtrst} $(free -oh | grep Mem | awk '{printf "%s free /%s total", $3, $2}' )"
+echo -e "${txtgrn}Memory:${txtrst} $(LC_ALL=C free -oh | grep Mem | awk '{printf "%s free /%s total", $3, $2}' )"
