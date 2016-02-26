@@ -29,7 +29,17 @@ export HISTIGNORE='&:bg:fg:ll:h:date'
 export HISTCONTROL=ignoreboth:erasedups
 
 # auto logout after n seconds of inactivity
-export TMOUT=1200
+bashpid_tmp=$$
+bashppid=$(ps -p $bashpid_tmp -o ppid= 2>/dev/null)
+bashpcmd=$(ps -p $bashppid -o command= 2>/dev/null)
+if [ "$bashpcmd" == "mc" ] ; then
+    # if in mc, disable, as shell will be accessible anyways
+    export TMOUT=0
+else
+    # 20 min
+    export TMOUT=1200
+fi
+unset bashpid_tmp bashppid bashpcmd
 
 # meaningful <tab><tab> output
 set visible-stats on
